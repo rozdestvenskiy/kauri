@@ -27,9 +27,14 @@ int main(int argc, char* argv[])
   #else
     int sock = socket_create();
   #endif
-
-  int cl = socket_connect(sock);
-
+    cout << "x" << endl;
+#ifdef _WIN32
+    SOCKET cl = socket_connect(sock);
+#else
+    int cl = socket_connect(sock);
+#endif
+  
+    cout << "y" << endl;
   cout << sock << endl;
   cout << cl << endl;
 

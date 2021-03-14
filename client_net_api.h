@@ -2,20 +2,24 @@
 #define SERVER_NET_API_H
 
 #ifdef _WIN32
-  #include <winsock2.h>
-  #include <windows.h>
-  #include <Ws2tcpip.h>
-  #pragma comment (lib, "Ws2_32.lib")
+#define _WIN32_WINNT 0x501
+#define WIN32_LEAN_AND_MEAN
+//
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#pragma comment (lib, "Ws2_32.lib")
 #else
-  #include <sys/socket.h>
-  #include <arpa/inet.h>
-  #include <netdb.h>
-  #include <unistd.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
 #endif
 #include <inttypes.h>
 #include <iostream>
 #include <string>
 #include <string.h>
+#include <vector>
 
 using namespace std;
 
@@ -25,10 +29,11 @@ struct hostent *server;
 #ifdef _WIN32
   SOCKET socket_create()
   {
-    WSADATA wsa_data;
+    WSADATA wsaData;
     SOCKET sock = INVALID_SOCKET;
-    struct addrinfo *result = NULL;
-    struct addrinfo hints;
+    struct addrinfo* result = NULL,
+        * ptr = NULL,
+        hints;
     int res;
 
     res = WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -42,7 +47,6 @@ struct hostent *server;
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
-    hints.ai_flags = AI_PASSIVE;
 
     res = getaddrinfo("127.0.0.1", "8080", &hints, &result);
     if (res != 0)
@@ -52,25 +56,32 @@ struct hostent *server;
         exit(1);
     }
 
-    sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-    if (sock == INVALID_SOCKET)
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) 
     {
-        printf("socket failed with error: %ld\n", WSAGetLastError());
-        freeaddrinfo(result);
-        WSACleanup();
-        exit(1);
+        // Create a SOCKET for connecting to server
+        sock = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+        if (sock == INVALID_SOCKET) {
+            printf("socket failed with error: %ld\n", WSAGetLastError());
+            WSACleanup();
+            return 1;
+        }
+
+        // Connect to server.
+        res = connect(sock, ptr->ai_addr, (int)ptr->ai_addrlen);
+        if (res == SOCKET_ERROR) 
+        {
+            closesocket(sock);
+            sock = INVALID_SOCKET;
+            continue;
+        }
+        break;
     }
+
+
+ 
 
     freeaddrinfo(result);
 
-    res = listen(sock, 10);
-    if (res == SOCKET_ERROR)
-    {
-        printf("listen failed with error: %d\n", WSAGetLastError());
-        closesocket(ListenSocket);
-        WSACleanup();
-        exit(1);
-    }
     return sock;
   }
 #else
@@ -165,14 +176,14 @@ struct hostent *server;
 #endif
 
 #ifdef _WIN32
-  int socket_send(SOCKET sock, string msg)
+  int socket_send(SOCKET sock, char* msg)
   {
-    return send(sock, msg, msg.length());
+      return send(sock, msg, (int)strlen(msg), 0);
   }
 #else
-  int socket_send(int sock, char *msg)
+  int socket_recv(int sock, char* msg)
   {
-    return send(sock, msg, sizeof(msg), 0);
+      return send(sock, msg, sizeof(msg), 0);
   }
 #endif
 

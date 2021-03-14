@@ -10,15 +10,16 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
+    cout << "123" << endl;
   char *msg = (char*)malloc(sizeof(char) * 100);
   snprintf(msg, sizeof("01234567890XYZ"), "01234567890XYZ");
-
+  cout << "123" << endl;
   #ifdef _WIN32
     SOCKET sock = socket_create();
   #else
     int sock = socket_create();
   #endif
-
+    cout << sock << endl;
   socket_send(sock, msg);
 
   socket_quit(sock);
