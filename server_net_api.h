@@ -189,19 +189,33 @@ int socket_quit(int sock)
 #endif
 
 #ifdef _WIN32
-string socket_recv_length(SOCKET sock)
+unsigned long long socket_recv_length(SOCKET sock)
 {
-    char* buff = (char*)malloc(sizeof(char) * 250);
-    int x = recv(sock, buff, 250, 0);
-    //cout << buff << endl;
-    if (x == -1)
+    //cout << "length" << endl;
+    char* sx = (char*)malloc(sizeof(char) * 4);
+    int x = recv(sock, sx, 1, 0);
+    //cout << x << endl;
+    unsigned char ch = (unsigned char)sx[0];
+    vector <unsigned char> vect;
+    unsigned long long res = 0;
+    if (ch < 128)
     {
-        cout << "err" << endl;
-        exit(1);
+        vect.push_back(ch);
+        res += vect[0];
     }
-    string str = (const char*)buff;
-    delete(buff);
-    return str;
+    else
+    {
+        vect.push_back(ch);
+        int kbytes = vect[0] & 127;
+        for (int i = 1; i < kbytes + 1; i++)
+        {
+            recv(sock, sx, sizeof(unsigned char), 0);
+            ch = sx[0];
+            vect.push_back(ch);
+            res += (vect[i] << (8 * (kbytes - i)));
+        }
+    }
+    return res;
 }
 #else
 unsigned long long socket_recv_length(int sock)
@@ -253,8 +267,9 @@ typedef struct
 } thread_dataS;
 
 #ifdef _WIN32
-static void* threadFunc(void* data)
+unsigned __stdcall threadFunc(void* thread_data_in)
 {
+    cout << "thread start" << endl;
   thread_dataS *data = (thread_dataS *) thread_data_in;
   //data->client_sock = thread_data_in->client_sock;
   //data->length = thread_data_in->length;
@@ -265,7 +280,7 @@ static void* threadFunc(void* data)
   //pthread_detach(pthread_self());
   //delete(data);
   //pthread_exit(0);
-
+  return 0;
 }
 
 int thread_create(SOCKET client_sock, unsigned long long length)
@@ -274,12 +289,12 @@ int thread_create(SOCKET client_sock, unsigned long long length)
   thread_data_in->client_sock = client_sock;
   thread_data_in->length = length;
 
-  int x = _beginthreadex(0, 0, threadFunc, thread_data_in, 0, NULL);
-  if (x == 0)
+  int x = _beginthreadex(0, 0, &threadFunc, thread_data_in, 0, NULL);
+  /*if (x == 0)
   {
     cerr << "error creating thread" << endl;
     exit(1);
-  }
+  }*/
   delete(thread_data_in);
   return 0;
 }

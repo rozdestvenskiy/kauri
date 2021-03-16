@@ -29,6 +29,7 @@ int main(int argc, char* argv[])
   {
     #ifdef _WIN32
         SOCKET cl = socket_connect(sock);
+        //cout << "conn" << endl;
     #else
         int cl = socket_connect(sock);
     #endif

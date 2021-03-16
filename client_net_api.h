@@ -220,7 +220,10 @@ int socket_send_length(SOCKET sock, unsigned long long length)
 
   for (int i = 0; i < res.size(); i++)
   {
-    send(sock, &res[i], sizeof(unsigned char), 0);
+      //char* buf = (char*)(&res[i]);
+      
+    send(sock, (char*)(&res[i]), sizeof(unsigned char), 0);
+    //delete(buf);
   }
     return 0;
 }
