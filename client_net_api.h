@@ -56,7 +56,7 @@ struct hostent *server;
         exit(1);
     }
 
-    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) 
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
     {
         // Create a SOCKET for connecting to server
         sock = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
@@ -68,7 +68,7 @@ struct hostent *server;
 
         // Connect to server.
         res = connect(sock, ptr->ai_addr, (int)ptr->ai_addrlen);
-        if (res == SOCKET_ERROR) 
+        if (res == SOCKET_ERROR)
         {
             closesocket(sock);
             sock = INVALID_SOCKET;
@@ -78,7 +78,7 @@ struct hostent *server;
     }
 
 
- 
+
 
     freeaddrinfo(result);
 
@@ -146,10 +146,10 @@ struct hostent *server;
 #endif
 
 #ifdef _WIN32
-  string socket_recv(SOCKET sock)
+  string socket_recv(SOCKET sock, unsigned long long length)
   {
-    char *buff = (char*) malloc(sizeof(char) * 250);
-    int x = recv(sock, buff, 250, 0);
+    char *buff = (char*) malloc(sizeof(char) * length);
+    int x = recv(sock, buff, length, 0);
     if (x == -1)
     {
       cout << "err" << endl;
@@ -160,10 +160,10 @@ struct hostent *server;
     return str;
   }
 #else
-  string socket_recv(int sock)
+  string socket_recv(int sock, unsigned long long length)
   {
-    char *buff = (char*) malloc(sizeof(char) * 250);
-    int x = recv(sock, buff, 250, 0);
+    char *buff = (char*) malloc(sizeof(char) * length);
+    int x = recv(sock, buff, length, 0);
     if (x == -1)
     {
       cout << "err" << endl;
@@ -181,9 +181,85 @@ struct hostent *server;
       return send(sock, msg, (int)strlen(msg), 0);
   }
 #else
-  int socket_recv(int sock, char* msg)
+  int socket_send(int sock, char* msg)
   {
-      return send(sock, msg, sizeof(msg), 0);
+      return send(sock, msg, strlen(msg), 0);
+  }
+#endif
+
+#ifdef _WIN32
+int socket_send_length(SOCKET sock, unsigned long long length)
+{
+  vector <unsigned char> res;
+  int kbytes = 0;
+  if (length > 127)
+  {
+    res.push_back(0);
+    for (int i = 0; i < sizeof(unsigned long long); i++)
+    {
+      if (length > (1 << (8 * i)))
+      {
+        kbytes++;
+      }
+      else
+      {
+        break;
+      }
+    }
+    res[0] |= 128;
+    res[0] |= kbytes;
+    for (int i = kbytes - 1; i >= 0; i--)
+    {
+      res.push_back(((255 << (i * 8)) & length) >> (i * 8));
+    }
+  }
+  else
+  {
+    res.push_back(length);
+  }
+
+  for (int i = 0; i < res.size(); i++)
+  {
+    send(sock, &res[i], sizeof(unsigned char), 0);
+  }
+    return 0;
+}
+#else
+  int socket_send_length(int sock, unsigned long long length)
+  {
+    vector <unsigned char> res;
+    int kbytes = 0;
+    if (length > 127)
+    {
+      res.push_back(0);
+      for (int i = 0; i < sizeof(unsigned long long); i++)
+      {
+        if (length > (1 << (8 * i)))
+        {
+          kbytes++;
+        }
+        else
+        {
+          break;
+        }
+      }
+      res[0] |= 128;
+      res[0] |= kbytes;
+      for (int i = kbytes - 1; i >= 0; i--)
+      {
+        res.push_back(((255 << (i * 8)) & length) >> (i * 8));
+      }
+    }
+    else
+    {
+      res.push_back(length);
+    }
+
+    for (int i = 0; i < res.size(); i++)
+    {
+      send(sock, &res[i], sizeof(unsigned char), 0);
+    }
+      return 0;
   }
 #endif
 

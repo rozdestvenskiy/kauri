@@ -8,12 +8,14 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <process.h>
 #pragma comment (lib, "Ws2_32.lib")
 #else
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <pthread.h>
 #endif
 #include <inttypes.h>
 #include <iostream>
@@ -125,7 +127,7 @@ int socket_create()
 SOCKET socket_connect(SOCKET sock)
 {
     SOCKET client = accept(sock, NULL, NULL);
-    if (client == INVALID_SOCKET) 
+    if (client == INVALID_SOCKET)
     {
         printf("accept failed with error: %d\n", WSAGetLastError());
         closesocket(sock);
@@ -156,11 +158,42 @@ int socket_quit(int sock)
 #endif
 
 #ifdef _WIN32
-string socket_recv(SOCKET sock)
+  string socket_recv(SOCKET sock, unsigned long long length)
+  {
+    char *buff = (char*) malloc(sizeof(char) * length);
+    int x = recv(sock, buff, length, 0);
+    if (x == -1)
+    {
+      cout << "err" << endl;
+      exit(1);
+    }
+    string str = (const char*)buff;
+    delete(buff);
+    return str;
+  }
+#else
+  string socket_recv(int sock, unsigned long long length)
+  {
+    char *buff = (char*) malloc(sizeof(char) * length);
+    int x = recv(sock, buff, length, 0);
+    cout << "length = " << x << endl;
+    if (x == -1)
+    {
+      cout << "err" << endl;
+      exit(1);
+    }
+    string str = (const char*)buff;
+    delete(buff);
+    return str;
+  }
+#endif
+
+#ifdef _WIN32
+string socket_recv_length(SOCKET sock)
 {
     char* buff = (char*)malloc(sizeof(char) * 250);
     int x = recv(sock, buff, 250, 0);
-    cout << buff << endl;
+    //cout << buff << endl;
     if (x == -1)
     {
         cout << "err" << endl;
@@ -171,18 +204,31 @@ string socket_recv(SOCKET sock)
     return str;
 }
 #else
-string socket_recv(int sock)
+unsigned long long socket_recv_length(int sock)
 {
-    char* buff = (char*)malloc(sizeof(char) * 250);
-    int x = recv(sock, buff, 250, 0);
-    if (x == -1)
+    char *sx = (char*) malloc(sizeof(char) * 4);
+    int x = recv(sock, sx, 1, 0);
+    unsigned char ch = (unsigned char)sx[0];
+    vector <unsigned char> vect;
+    unsigned long long res = 0;
+    if (ch < 128)
     {
-        cout << "err" << endl;
-        exit(1);
+      vect.push_back(ch);
+      res += vect[0];
     }
-    string str = (const char*)buff;
-    delete(buff);
-    return str;
+    else
+    {
+      vect.push_back(ch);
+      int kbytes = vect[0] & 127;
+      for (int i = 1; i < kbytes + 1; i++)
+      {
+        recv(sock, sx, sizeof(unsigned char), 0);
+        ch = sx[0];
+        vect.push_back(ch);
+        res += (vect[i] << (8 * (kbytes - i)));
+      }
+    }
+    return res;
 }
 #endif
 
@@ -192,12 +238,100 @@ int socket_send(SOCKET sock, char* msg)
     return send(sock, msg, sizeof(msg), 0);
 }
 #else
-int socket_recv(int sock, char* msg)
+int socket_send(int sock, char* msg)
 {
-    return send(sock, msg, sizeof(msg), 0);
+    return send(sock, msg, strlen(msg), 0);
 }
 #endif
 
+typedef struct
+{
+  //string msg;
+  unsigned long long length;
+  int client_sock;
+  struct sockaddr_in client;
+} thread_dataS;
+
+#ifdef _WIN32
+static void* threadFunc(void* data)
+{
+  thread_dataS *data = (thread_dataS *) thread_data_in;
+  //data->client_sock = thread_data_in->client_sock;
+  //data->length = thread_data_in->length;
+  string msg = socket_recv(data->client_sock, data->length);
+  //sleep(5);
+  cout << msg << endl;
+
+  //pthread_detach(pthread_self());
+  //delete(data);
+  //pthread_exit(0);
+
+}
+
+int thread_create(SOCKET client_sock, unsigned long long length)
+{
+  thread_dataS *thread_data_in = new thread_dataS;
+  thread_data_in->client_sock = client_sock;
+  thread_data_in->length = length;
+
+  int x = _beginthreadex(0, 0, threadFunc, thread_data_in, 0, NULL);
+  if (x == 0)
+  {
+    cerr << "error creating thread" << endl;
+    exit(1);
+  }
+  delete(thread_data_in);
+  return 0;
+}
+
+
+
+
+#else
+
+
+static void* threadFunc(void* thread_data_in)
+{
+  thread_dataS *data = (thread_dataS *) thread_data_in;
+  //data->client_sock = thread_data_in->client_sock;
+  //data->length = thread_data_in->length;
+  string msg = socket_recv(data->client_sock, data->length);
+  //sleep(5);
+  cout << msg << endl;
+
+
+
+  pthread_detach(pthread_self());
+  //delete(data);
+  pthread_exit(0);
+}
+
+int thread_create(int client_sock, unsigned long long length)
+{
+  pthread_t *new_thread = new pthread_t;
+  if (new_thread == NULL)
+  {
+    cerr << "Error while creating thread" << endl;
+    exit(1);
+  }
+  thread_dataS *thread_data_in = new thread_dataS;
+  thread_data_in->client_sock = client_sock;
+  thread_data_in->length = length;
+  //thread_data_in->msg = msg;
+
+  int rr;
+  rr = pthread_create(new_thread, NULL, threadFunc, (void*)thread_data_in);
+  if (rr != 0)
+  {
+    cerr << "Error while creating thread" << endl;
+    exit(1);
+  }
+
+  delete(thread_data_in);
+  return 0;
+}
+
+#endif
 
 
 

@@ -8,15 +8,7 @@
 //int sock;
 
 
-void* threadFunc(void* thread_data);
 
-/*
-typedef struct {
-  char *file_name;
-	FILE *fout;
-  int out_socket;
-  struct sockaddr_in client;
-} thread_dataS;*/
 
 using namespace std;
 
@@ -27,22 +19,36 @@ int main(int argc, char* argv[])
   #else
     int sock = socket_create();
   #endif
-    cout << "x" << endl;
-#ifdef _WIN32
-    SOCKET cl = socket_connect(sock);
-#else
-    int cl = socket_connect(sock);
-#endif
-  
-    cout << "y" << endl;
-  cout << sock << endl;
-  cout << cl << endl;
+    //cout << "x" << endl;
 
-  string msg = socket_recv(cl);
 
-  cout << msg << endl;
 
-  int connfd, n;
+  //MAIN CYCLE START
+
+  while (1)
+  {
+    #ifdef _WIN32
+        SOCKET cl = socket_connect(sock);
+    #else
+        int cl = socket_connect(sock);
+    #endif
+
+    unsigned long long len = socket_recv_length(cl);
+
+    //cout << len << endl;
+
+    #ifdef _WIN32
+
+    #else
+        int x = thread_create(cl, len);
+    #endif
+
+
+    // THREAD FUNC HERE
+
+  }
+
+
   return 0;
 }
 /*
